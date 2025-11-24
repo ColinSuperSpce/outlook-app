@@ -12,3 +12,12 @@
 .DS_Store
 Thumbs.db
 
+# Build artifacts
+server/build/
+server/dist/
+*.spec
+
+# Distribution packages
+*.zip
+dist-package/
+
