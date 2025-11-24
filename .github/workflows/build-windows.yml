@@ -27,6 +27,7 @@ jobs:
     
     - name: Clean previous builds
       working-directory: ./server
+      shell: cmd
       run: |
         if exist dist rmdir /s /q dist
         if exist build rmdir /s /q build
