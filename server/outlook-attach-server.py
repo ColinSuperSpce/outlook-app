@@ -245,7 +245,8 @@ class AttachHandler(http.server.BaseHTTPRequestHandler):
 
 def main():
     """Start the HTTP server."""
-    server_address = ('', PORT)
+    # Bind to localhost only (127.0.0.1) for security and to avoid firewall issues
+    server_address = ('127.0.0.1', PORT)
     httpd = http.server.HTTPServer(server_address, AttachHandler)
     
     print(f"Outlook Auto Attach server started on http://localhost:{PORT}")

@@ -39,7 +39,9 @@ echo "🍎 Copying Mac server launcher..."
 if [ -d "server/dist/Outlook Auto Attach Server.app" ]; then
     cp -R "server/dist/Outlook Auto Attach Server.app" "$DIST_DIR/Server/Mac/"
     chmod -R +x "$DIST_DIR/Server/Mac/Outlook Auto Attach Server.app"
-    echo "   ✅ Copied .app bundle"
+    # Remove quarantine attribute so app can open without warning
+    xattr -cr "$DIST_DIR/Server/Mac/Outlook Auto Attach Server.app" 2>/dev/null || true
+    echo "   ✅ Copied .app bundle (quarantine removed)"
 elif [ -f "server/dist/Outlook Auto Attach Server" ]; then
     cp "server/dist/Outlook Auto Attach Server" "$DIST_DIR/Server/Mac/"
     chmod +x "$DIST_DIR/Server/Mac/Outlook Auto Attach Server"
@@ -79,9 +81,6 @@ elif [ -f "dist/server/Outlook Auto Attach Server.exe" ]; then
     elif [ -d "dist/server/Outlook Auto Attach Server/_internal" ]; then
         cp -R "dist/server/Outlook Auto Attach Server/_internal" "$DIST_DIR/Server/Windows/Outlook Auto Attach Server/"
         echo "   ✅ Copied _internal folder"
-    else
-        echo "   ⚠️  WARNING: Missing _internal folder!"
-        echo "   💡 Make sure _internal folder is in dist/server/ or dist/server/Outlook Auto Attach Server/"
     fi
 elif [ -f "server/dist/Outlook Auto Attach Server.exe" ]; then
     mkdir -p "$DIST_DIR/Server/Windows/Outlook Auto Attach Server"
@@ -89,6 +88,12 @@ elif [ -f "server/dist/Outlook Auto Attach Server.exe" ]; then
     echo "   ⚠️  Copied .exe only - Windows users need _internal folder!"
 elif [ -f "dist/server/outlook-attach-server.exe" ]; then
     cp "dist/server/outlook-attach-server.exe" "$DIST_DIR/Server/Windows/"
+fi
+
+# Copy firewall exception script to Windows folder (always copy if it exists)
+if [ -f "server/add-firewall-exception.ps1" ]; then
+    cp "server/add-firewall-exception.ps1" "$DIST_DIR/Server/Windows/"
+    echo "   ✅ Copied firewall exception script"
 fi
 
 # Create installation instructions
@@ -116,10 +121,14 @@ This package contains:
 
 #### For Mac users:
 1. Open the `Server/Mac` folder
-2. Double-click `Outlook Auto Attach Server.app` to start it
-   - **First time**: Mac may warn about unsigned app - right-click and select "Open", then click "Open" again
+2. **First time**: Right-click on `Outlook Auto Attach Server.app` and select **"Open"**, then click **"Open"** again in the security dialog
+   - This only needs to be done once - after that, you can double-click normally
 3. The server starts automatically - you can minimize or close the window
 4. The server will keep running in the background
+
+**If you see a security warning:**
+- Right-click the app → **"Open"** → Click **"Open"** in the dialog
+- Or: Go to **System Settings → Privacy & Security** and click **"Open Anyway"**
 
 **Optional - Start on Login:**
 1. Drag `Outlook Auto Attach Server.app` to your **Applications** folder (recommended)
@@ -130,12 +139,30 @@ This package contains:
 
 #### For Windows users:
 1. Open the `Server/Windows` folder
-2. Double-click `Outlook Auto Attach Server.exe` to start it
-3. The server window will open - click **Start Server**
-4. You can minimize the window - the server will keep running
+2. **IMPORTANT**: Copy the ENTIRE `Outlook Auto Attach Server` folder to your Desktop or another location
+   - ⚠️ Do NOT just copy the .exe file - you need the whole folder (including `_internal`)
+3. Open the copied `Outlook Auto Attach Server` folder
+4. **IMPORTANT: If you have connection issues** - Run the firewall exception script FIRST:
+   - Right-click `add-firewall-exception.ps1` in the `Server/Windows` folder
+   - Select **"Run with PowerShell"** (run as Administrator if prompted)
+   - This adds Windows Firewall exception for port 8765
+5. **First time**: Windows may show a SmartScreen warning when you double-click `Outlook Auto Attach Server.exe`
+   - Click **"More info"** → **"Run anyway"**
+   - This only needs to be done once - after that, you can double-click normally
+6. The server window will open - the server starts automatically
+7. You can minimize the window - the server will keep running
+
+**If you see a security warning (SmartScreen):**
+- Click **"More info"** in the warning dialog
+- Click **"Run anyway"** button
+- Or: Right-click the .exe → **Properties** → Check **"Unblock"** at the bottom → Click **OK**
+
+**If your antivirus flags the file:**
+- This is a false positive - PyInstaller executables are sometimes flagged by antivirus
+- Add an exception for the `Outlook Auto Attach Server` folder in your antivirus settings
 
 **Optional - Start on Login:**
-1. Right-click `Outlook Auto Attach Server.exe`
+1. Right-click `Outlook Auto Attach Server.exe` (in the folder you copied)
 2. Select "Create shortcut"
 3. Press `Win + R`, type `shell:startup`, press Enter
 4. Copy the shortcut to the Startup folder
@@ -164,8 +191,39 @@ This package contains:
 - Try stopping and restarting the server
 - Make sure Microsoft Outlook is installed
 
+### Extension can't connect to server (Windows)
+**If you see "Failed to connect to local server" in Chrome:**
+
+This is usually caused by Windows Firewall blocking the connection. Try these solutions:
+
+**Option 1: Run Firewall Exception Script (Easiest)**
+1. Right-click on `add-firewall-exception.ps1` in the Server/Windows folder
+2. Select **"Run with PowerShell"** (as Administrator if prompted)
+3. Follow the prompts to add the firewall exception
+4. Restart the server application
+
+**Option 2: Manual Firewall Configuration**
+1. Press `Win + R`, type `wf.msc`, press Enter
+2. Click **"Inbound Rules"** → **"New Rule"**
+3. Select **"Port"** → Next
+4. Select **"TCP"** → Enter port **8765** → Next
+5. Select **"Allow the connection"** → Next
+6. Check all profiles (Domain, Private, Public) → Next
+7. Name it **"Outlook Auto Attach Server"** → Finish
+8. Restart the server application
+
+**Option 3: Run as Administrator**
+- Right-click `Outlook Auto Attach Server.exe` → **"Run as administrator"**
+- Click "Yes" if Windows asks for permission
+- This may bypass firewall restrictions (though Option 1 is better)
+
+**Option 4: Use Test Connection Button**
+- In the server window, click **"Test Connection"** button
+- This will help diagnose the exact issue
+
 ### Extension not working
 - Make sure the server is running (Status: Running)
+- **Click "Test Connection" button** in the server window to verify connectivity
 - Check that you're downloading files with "Orderbekräftelse", "Inköp", or "1000322" in the name
 - Check Chrome's extension console for errors (chrome://extensions/ → Details → Inspect views → Service worker)
 

@@ -2,15 +2,17 @@
 """
 Outlook Auto Attach Server Launcher with GUI
 Simple GUI application to start/stop the server
+Version: 1.0.1
 """
 
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox
 import threading
 import http.server
 import sys
 import os
 import socket
+import urllib.request
 from datetime import datetime
 
 # Import server functionality from outlook-attach-server.py
@@ -163,6 +165,14 @@ class ServerLauncher:
         )
         self.stop_button.grid(row=0, column=1, padx=5)
         
+        self.test_button = ttk.Button(
+            button_frame,
+            text="Test Connection",
+            command=self.test_connection,
+            width=15
+        )
+        self.test_button.grid(row=0, column=2, padx=5)
+        
         # Log frame
         log_frame = ttk.LabelFrame(main_frame, text="Activity Log", padding="10")
         log_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
@@ -243,13 +253,28 @@ class ServerLauncher:
         
         def run_server():
             try:
-                server_address = ('', PORT)
+                # Bind to localhost only (127.0.0.1) for security and to avoid firewall issues
+                server_address = ('127.0.0.1', PORT)
                 httpd = http.server.HTTPServer(server_address, GUIAttachHandler)
                 httpd.log_callback = self.log
                 self.server_instance = httpd
                 
-                self.root.after(0, self.log, f"Starting server on port {PORT}...")
-                self.root.after(0, self.server_started_ui)
+                self.root.after(0, self.log, f"Starting server on 127.0.0.1:{PORT}...")
+                # Give server a moment to actually start
+                import time
+                time.sleep(0.2)
+                
+                # Test that server is actually listening
+                test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                test_result = test_sock.connect_ex(('127.0.0.1', PORT))
+                test_sock.close()
+                
+                if test_result == 0:
+                    self.root.after(0, self.log, f"✅ Server is running and listening on 127.0.0.1:{PORT}")
+                    self.root.after(0, self.server_started_ui)
+                else:
+                    self.root.after(0, self.log, f"⚠️ Warning: Server may not be listening properly")
+                    self.root.after(0, self.server_started_ui)
                 
                 httpd.serve_forever()
             except OSError as e:
@@ -293,6 +318,48 @@ class ServerLauncher:
         """Update UI when server stops."""
         self.server_running = False
         self.update_ui()
+    
+    def test_connection(self):
+        """Test if the server is accessible."""
+        self.log("Testing connection to server...")
+        
+        def test():
+            try:
+                # Try to connect to the server
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2)
+                result = sock.connect_ex(('127.0.0.1', PORT))
+                sock.close()
+                
+                if result == 0:
+                    # Try HTTP request
+                    try:
+                        response = urllib.request.urlopen(f'http://127.0.0.1:{PORT}/status', timeout=2)
+                        status = response.read().decode('utf-8')
+                        self.root.after(0, self.log, f"Connection test successful! Server responded: {status}")
+                        self.root.after(0, lambda: messagebox.showinfo("Test Result", "✅ Connection successful!\n\nThe server is running and accessible."))
+                    except Exception as e:
+                        self.root.after(0, self.log, f"Server is listening but not responding: {e}")
+                        self.root.after(0, lambda: messagebox.showwarning("Test Result", f"⚠️ Server is listening but not responding correctly:\n{e}"))
+                else:
+                    self.root.after(0, self.log, f"Connection test failed: Cannot connect to 127.0.0.1:{PORT}")
+                    error_msg = (
+                        "Cannot connect to server!\n\n"
+                        "Possible causes:\n"
+                        "1. Server is not running\n"
+                        "2. Windows Firewall is blocking the connection\n"
+                        "3. Antivirus is blocking the connection\n\n"
+                        "Try:\n"
+                        "- Start the server first\n"
+                        "- Check Windows Firewall settings\n"
+                        "- Run as Administrator if needed"
+                    )
+                    self.root.after(0, lambda: messagebox.showerror("Test Result", error_msg))
+            except Exception as e:
+                self.root.after(0, self.log, f"Connection test error: {e}")
+                self.root.after(0, lambda: messagebox.showerror("Test Error", f"Error testing connection:\n{e}"))
+        
+        threading.Thread(target=test, daemon=True).start()
     
     def update_ui(self):
         """Update the UI based on server status."""
