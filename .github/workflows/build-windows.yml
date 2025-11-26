@@ -42,11 +42,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: outlook-attach-server-windows
-        path: server/dist/Outlook Auto Attach Server/Outlook Auto Attach Server.exe
-    
-    - name: Upload Windows app folder
-      uses: actions/upload-artifact@v4
-      with:
-        name: outlook-attach-server-windows-folder
-        path: server/dist/Outlook Auto Attach Server/
+        path: server/dist/Outlook Auto Attach Server.exe
 
