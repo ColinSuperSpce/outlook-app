@@ -36,11 +36,17 @@ jobs:
     - name: Build Windows GUI launcher
       working-directory: ./server
       run: |
-        python -m PyInstaller --windowed --onefile --name "Outlook Auto Attach Server" --add-data "outlook-attach-server.py;." --hidden-import=tkinter --hidden-import=json --hidden-import=http.server --hidden-import=subprocess --hidden-import=platform --hidden-import=shutil --hidden-import=tempfile --hidden-import=datetime --hidden-import=socket --hidden-import=threading --hidden-import=importlib.util --hidden-import=win32com.client --clean outlook-attach-launcher.py
+        python -m PyInstaller --windowed --onedir --name "Outlook Auto Attach Server" --add-data "outlook-attach-server.py;." --hidden-import=tkinter --hidden-import=json --hidden-import=http.server --hidden-import=subprocess --hidden-import=platform --hidden-import=shutil --hidden-import=tempfile --hidden-import=datetime --hidden-import=socket --hidden-import=threading --hidden-import=importlib.util --hidden-import=win32com.client --clean outlook-attach-launcher.py
     
     - name: Upload Windows executable
       uses: actions/upload-artifact@v4
       with:
         name: outlook-attach-server-windows
-        path: server/dist/Outlook Auto Attach Server.exe
+        path: server/dist/Outlook Auto Attach Server/Outlook Auto Attach Server.exe
+    
+    - name: Upload Windows app folder
+      uses: actions/upload-artifact@v4
+      with:
+        name: outlook-attach-server-windows-folder
+        path: server/dist/Outlook Auto Attach Server/
 
