@@ -24,13 +24,31 @@ function shouldProcessFile(filePath) {
   // Normalize to lowercase for comparison
   const filenameLower = filename.toLowerCase();
   
-  // Check if filename includes "Orderbekräftelse" (case-insensitive), "1000322", or "Inköp"
+  // Check if filename includes "Orderbekräftelse" (case-insensitive), any 7-digit number, or "Inköp"
   const includesOrderbekraeftelse = filenameLower.includes('orderbekräftelse') || 
                                      filenameLower.includes('orderbekr');
-  const includesOrderNumber = filenameLower.includes('1000322');
+  // Check for any 7-digit number (e.g., 1000322, 1000355, etc.)
+  // Match 7 consecutive digits anywhere in the filename
+  const includesOrderNumber = /\d{7}/.test(filename);
   const includesInkop = filenameLower.includes('inköp') || filenameLower.includes('inkop');
   
   const shouldProcess = includesOrderbekraeftelse || includesOrderNumber || includesInkop;
+  
+  // Debug logging
+  if (shouldProcess) {
+    console.log('File matches criteria:', filename, {
+      includesOrderbekraeftelse,
+      includesOrderNumber,
+      includesInkop
+    });
+  } else {
+    console.log('File does not match criteria:', filename, {
+      includesOrderbekraeftelse,
+      includesOrderNumber,
+      includesInkop,
+      has7Digits: /\d{7}/.test(filename)
+    });
+  }
   
   return shouldProcess;
 }
@@ -65,13 +83,14 @@ chrome.downloads.onChanged.addListener((downloadDelta) => {
         if (download.state === 'complete' && download.error === undefined) {
           const filePath = download.filename;
           
-          
           // Check if file matches filter criteria before processing
-          if (shouldProcessFile(filePath)) {
+          const matches = shouldProcessFile(filePath);
+          
+          if (matches) {
             // Show confirmation dialog before opening Outlook
             showConfirmationDialog(filePath, download.id);
           } else {
-            console.log('File does not match filter criteria - skipping:', filePath);
+            console.log('File does NOT match filter criteria - skipping:', filePath);
           }
         } else {
           console.error('Download did not complete successfully:', {
@@ -85,7 +104,7 @@ chrome.downloads.onChanged.addListener((downloadDelta) => {
       }
     });
   } else if (downloadDelta.state) {
-    console.log('⏳ Download state:', downloadDelta.state.current, 'for ID:', downloadDelta.id);
+    console.log('Download state:', downloadDelta.state.current, 'for ID:', downloadDelta.id);
   }
 });
 
@@ -93,9 +112,7 @@ chrome.downloads.onChanged.addListener((downloadDelta) => {
 const pendingFiles = new Map();
 
 // Function to show confirmation dialog
-function showConfirmationDialog(filePath, downloadId) {
-  console.log('Showing confirmation dialog for:', filePath);
-  
+function showConfirmationDialog(filePath, downloadId) {  
   // Store the file path for when user confirms
   pendingFiles.set(downloadId, filePath);
   
@@ -221,9 +238,7 @@ function sendToServer(filePath) {
       });
     }
   })
-  .catch(error => {
-    console.error('Error communicating with server:', error);
-    
+  .catch(error => {    
     // Show error notification
     chrome.notifications.create({
       type: 'basic',

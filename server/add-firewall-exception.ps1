@@ -47,7 +47,7 @@ try {
         -ErrorAction Stop
     
     Write-Host ""
-    Write-Host "✅ Firewall exception added successfully!" -ForegroundColor Green
+    Write-Host "Firewall exception added successfully!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Rule details:" -ForegroundColor Cyan
     Write-Host "  Name: $ruleName" -ForegroundColor White
@@ -76,4 +76,5 @@ try {
 
 Write-Host "Press any key to exit..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
 

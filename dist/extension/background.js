@@ -23,13 +23,31 @@ function shouldProcessFile(filePath) {
   // Normalize to lowercase for comparison
   const filenameLower = filename.toLowerCase();
   
-  // Check if filename includes "Orderbekräftelse" (case-insensitive), "1000322", or "Inköp"
+  // Check if filename includes "Orderbekräftelse" (case-insensitive), any 7-digit number, or "Inköp"
   const includesOrderbekraeftelse = filenameLower.includes('orderbekräftelse') || 
                                      filenameLower.includes('orderbekr');
-  const includesOrderNumber = filenameLower.includes('1000322');
+  // Check for any 7-digit number (e.g., 1000322, 1000355, etc.)
+  // Match 7 consecutive digits anywhere in the filename
+  const includesOrderNumber = /\d{7}/.test(filename);
   const includesInkop = filenameLower.includes('inköp') || filenameLower.includes('inkop');
   
   const shouldProcess = includesOrderbekraeftelse || includesOrderNumber || includesInkop;
+  
+  // Debug logging
+  if (shouldProcess) {
+    console.log('File matches criteria:', filename, {
+      includesOrderbekraeftelse,
+      includesOrderNumber,
+      includesInkop
+    });
+  } else {
+    console.log('File does not match criteria:', filename, {
+      includesOrderbekraeftelse,
+      includesOrderNumber,
+      includesInkop,
+      has7Digits: /\d{7}/.test(filename)
+    });
+  }
   
   return shouldProcess;
 }
@@ -44,7 +62,7 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
 
           showConfirmationDialog(filePath, downloadItem.id);
     } else if (filePath) {
-          console.log('⏭️ File does not match filter criteria - skipping:', filePath);
+          console.log('File does not match filter criteria - skipping:', filePath);
     }
   }
 });
@@ -65,14 +83,18 @@ chrome.downloads.onChanged.addListener((downloadDelta) => {
         if (download.state === 'complete' && download.error === undefined) {
           const filePath = download.filename;
           
-          console.log('🎉 Download completed successfully!');
-          console.log('📁 File path:', filePath);
+          console.log('Download completed successfully!');
+          console.log('File path:', filePath);
           
           // Check if file matches filter criteria before processing
-          if (shouldProcessFile(filePath)) {
-            console.log('✅ File matches filter - showing confirmation...');
+          const matches = shouldProcessFile(filePath);
+          
+          if (matches) {
+            console.log('File matches filter - showing confirmation...');
             // Show confirmation dialog before opening Outlook
             showConfirmationDialog(filePath, download.id);
+          } else {
+            console.log('File does NOT match filter criteria - skipping');
           }
         } else {
           console.error('Download did not complete successfully:', {
@@ -103,22 +125,17 @@ function showConfirmationDialog(filePath, downloadId) {
   chrome.action.setBadgeBackgroundColor({ color: '#0078d4' });
   chrome.action.setTitle({ title: 'Click to confirm sending file via Outlook' });
   
-  // Try to open the popup programmatically (may not work in all cases)
-  // User will see the badge and can click the extension icon
   chrome.action.openPopup(() => {
     if (chrome.runtime.lastError) {
-      // Send message to popup if it's already open
       chrome.runtime.sendMessage({
         action: 'showConfirmation',
         filePath: filePath,
         downloadId: downloadId
       }).catch(() => {
-        // Popup not open, user will see badge and click icon
       });
     }
   });
   
-  // Also show a notification to guide user
   chrome.notifications.create({
     type: 'basic',
     iconUrl: 'icons/icon48.png',
@@ -126,17 +143,14 @@ function showConfirmationDialog(filePath, downloadId) {
     message: 'Click the extension icon to confirm sending file via Outlook',
     requireInteraction: false
   }, (notificationId) => {
-    // Auto-clear notification after 5 seconds
     setTimeout(() => {
       chrome.notifications.clear(notificationId);
     }, 5000);
   });
 }
 
-// Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getPendingFile') {
-    // Return the first pending file
     const entries = Array.from(pendingFiles.entries());
     if (entries.length > 0) {
       const [downloadId, filePath] = entries[0];

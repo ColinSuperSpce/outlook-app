@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-echo "🔨 Building macOS GUI launcher..."
+echo "Building macOS GUI launcher..."
 
 # Check if PyInstaller is installed
 if ! python3 -m PyInstaller --version &> /dev/null; then
@@ -44,24 +44,24 @@ python3 -m PyInstaller \
 # Check if .app bundle was created
 if [ -d "dist/Outlook Auto Attach Server.app" ]; then
     APP_PATH="dist/Outlook Auto Attach Server.app"
-    echo "📱 Found .app bundle, signing and removing quarantine..."
+    echo "Found .app bundle, signing and removing quarantine..."
     
     # Remove quarantine attribute (allows app to open without warning)
     xattr -cr "$APP_PATH" 2>/dev/null || true
     
     # Sign with ad-hoc signature (allows app to run)
     codesign --force --deep --sign - "$APP_PATH" 2>/dev/null || {
-        echo "⚠️  Warning: Could not code sign app (may need to run 'xattr -cr' manually)"
+        echo "Warning: Could not code sign app (may need to run 'xattr -cr' manually)"
     }
     
-    echo "✅ Build complete!"
-    echo "📦 App bundle: $APP_PATH"
+    echo "Build complete!"
+    echo "App bundle: $APP_PATH"
 elif [ -f "dist/Outlook Auto Attach Server" ]; then
     chmod +x "dist/Outlook Auto Attach Server"
-    echo "✅ Build complete!"
-    echo "📦 Executable: dist/Outlook Auto Attach Server"
+    echo "Build complete!"
+    echo "Executable: dist/Outlook Auto Attach Server"
 else
-    echo "❌ Error: Could not find built app!"
+    echo "Error: Could not find built app!"
     exit 1
 fi
 

@@ -13,15 +13,18 @@ import subprocess
 import platform
 import shutil
 import tempfile
+import re
 from datetime import datetime
 
-# Server configuration
 PORT = 8765
 
 
 def create_unique_file_copy(original_path):
     """
-    Create a unique copy of the file with a clean name format: Orderbekräftelse-datum-tid.pdf
+    Create a unique copy of the file with a clean name format based on file type:
+    - Files with 7-digit numbers → "Faktura-datum-tid.pdf"
+    - Files with "Inköp" → "Order-datum-tid.pdf"
+    - Files with "Orderbekräftelse" → "Orderbekräftelse-datum-tid.pdf"
     Includes microseconds to ensure uniqueness and avoid system-appended numbers.
     Returns the path to the unique copy.
     """
@@ -29,28 +32,36 @@ def create_unique_file_copy(original_path):
         return None, f"File not found: {original_path}"
     
     try:
-        # Get original file directory and extension
-        original_dir = os.path.dirname(original_path)
         original_name = os.path.basename(original_path)
         name_parts = os.path.splitext(original_name)
-        file_extension = name_parts[1]  # Keep original extension (.pdf, etc.)
+        file_extension = name_parts[1]
         
-        # Create clean filename based on file type: Orderbekräftelse-datum-tid.pdf or Inköp-datum-tid.pdf
+        home_dir = os.path.expanduser("~")
+        desktop_dir = os.path.join(home_dir, "Desktop")
+        businessnxtdocs_dir = os.path.join(desktop_dir, "businessnxtdocs")
+                
+        os.makedirs(businessnxtdocs_dir, exist_ok=True)
+        
         now = datetime.now()
         timestamp = now.strftime("%Y%m%d-%H%M%S")
-        microseconds = now.strftime("%f")  # Include microseconds to prevent duplicates
+        microseconds = now.strftime("%f")
         
-        # Detect file type from original filename
         original_lower = original_name.lower()
-        if 'inköp' in original_lower or 'inkop' in original_lower:
-            base_name = "Inköp"
+        
+        has_7digits = bool(re.search(r'\d{7}', original_name))
+        has_inkop = 'inköp' in original_lower or 'inkop' in original_lower
+        has_orderbekraeftelse = 'orderbekräftelse' in original_lower or 'orderbekr' in original_lower
+                
+        if has_7digits:
+            base_name = "Faktura"
+        elif has_inkop:
+            base_name = "Order"
         else:
             base_name = "Orderbekräftelse"
         
         unique_name = f"{base_name}-{timestamp}-{microseconds}{file_extension}"
-        unique_path = os.path.join(original_dir, unique_name)
+        unique_path = os.path.join(businessnxtdocs_dir, unique_name)
         
-        # Copy file to unique name
         shutil.copy2(original_path, unique_path)
         
         return unique_path, None
@@ -65,10 +76,8 @@ def open_outlook_mac(file_path):
         return False, f"File not found: {file_path}"
     
     try:
-        # Normalize path for AppleScript
         file_path = os.path.abspath(file_path)
         
-        # AppleScript to create a new email in Outlook with attachment
         script = f'''
         tell application "Microsoft Outlook"
             activate
@@ -80,7 +89,6 @@ def open_outlook_mac(file_path):
         end tell
         '''
         
-        # Run AppleScript
         result = subprocess.run(
             ['osascript', '-e', script],
             capture_output=True,
@@ -108,20 +116,15 @@ def open_outlook_windows(file_path):
     try:
         import win32com.client
         
-        # Normalize path for Windows
         file_path = os.path.abspath(file_path)
         file_path = file_path.replace('/', '\\')
         
-        # Create Outlook COM object
         outlook = win32com.client.Dispatch("Outlook.Application")
         
-        # Create new mail item
-        mail_item = outlook.CreateItem(0)  # 0 = olMailItem
+        mail_item = outlook.CreateItem(0)
         
-        # Attach the file
         mail_item.Attachments.Add(file_path)
         
-        # Display the email (opens Outlook window)
         mail_item.Display()
         
         return True, "Outlook opened successfully"
@@ -155,7 +158,6 @@ class AttachHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         
-        # Read request body
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
         
@@ -167,32 +169,22 @@ class AttachHandler(http.server.BaseHTTPRequestHandler):
                 self.send_error_response(400, "Missing filePath in request")
                 return
             
-            # Create a unique copy of the file with timestamp to avoid conflicts
-            # This ensures we attach the exact file that was confirmed
             unique_file_path, copy_error = create_unique_file_copy(file_path)
             if not unique_file_path:
                 self.send_error_response(500, copy_error or "Failed to create unique file copy")
                 return
             
-            # Use the unique file path for attachment
             file_to_attach = unique_file_path
             
-            # Open Outlook based on platform
             system = platform.system()
-            if system == 'Darwin':  # macOS
+            if system == 'Darwin':
                 success, message = open_outlook_mac(file_to_attach)
             elif system == 'Windows':
                 success, message = open_outlook_windows(file_to_attach)
             else:
-                # Clean up unique file if platform unsupported
-                try:
-                    os.remove(unique_file_path)
-                except:
-                    pass
                 self.send_error_response(400, f"Unsupported platform: {system}")
                 return
             
-            # Send response
             response_data = {
                 'success': success,
                 'message': message
@@ -204,14 +196,10 @@ class AttachHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response_data).encode('utf-8'))
             
-            # Log the result
             status = "Success" if success else "Failed"
             original_filename = os.path.basename(file_path)
             unique_filename = os.path.basename(file_to_attach)
             self.log_message(f"Attached file: {original_filename} (unique: {unique_filename}) - {status}: {success}")
-            
-            # Note: We keep the unique file copy (user can delete it later if needed)
-            # This ensures the attachment always points to the correct file
             
         except json.JSONDecodeError:
             self.send_error_response(400, "Invalid JSON in request body")
@@ -245,7 +233,6 @@ class AttachHandler(http.server.BaseHTTPRequestHandler):
 
 def main():
     """Start the HTTP server."""
-    # Bind to localhost only (127.0.0.1) for security and to avoid firewall issues
     server_address = ('127.0.0.1', PORT)
     httpd = http.server.HTTPServer(server_address, AttachHandler)
     
